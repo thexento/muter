@@ -155,7 +155,9 @@ Chrome/Edge. Both panels are the same `popup.html` document.
 - Typing handles:
   - **TinyMCE** — targets `iframe.tox-edit-area__iframe`, clears the iframe body, types into
     it, fires `input`/`change`, and calls `tinymce.triggerSave()`.
-  - **CodeMirror 5** — `CodeMirror.replaceSelection`.
+  - **CodeMirror 5** — the wrapper's instance (`wrap.CodeMirror`) is used:
+    clears the doc (`setValue('')`) and types via `replaceSelection(ch)` per
+    character.
   - **CodeMirror 6** — dispatches into the editor view when available, otherwise types into
     `.cm-content`.
   - **Inputs / textareas** — clears the value and types character by character.

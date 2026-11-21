@@ -272,7 +272,7 @@ function gate(input, init) {
   }
 
   function insertChar(t, ch) {
-    if (t.cm) { t.cm.replaceSelection(ch, 'end'); return; }
+    if (t.cm) { t.cm.replaceSelection(ch); return; } // CM5: cursor advances after each insert
     if (t.cm6) {
       t.cm6.focus();
       t.cm6.dispatch({
@@ -391,9 +391,13 @@ function gate(input, init) {
       const host = block.matches?.('.cm-editor, .CodeMirror')
         ? block
         : (block.querySelector('.cm-editor, .CodeMirror') || block);
-      if (findCM(host)) return { editor: 'codemirror', host };
-      const cm = findCM5Editor(host);
+      // CodeMirror 5: the instance hangs on the wrapper (`wrapper.CodeMirror`);
+      // type through its doc API.
+      const cm = findCM(host);
       if (cm) return { editor: 'codemirror', host, cm5: cm };
+      // CodeMirror 6: a .cm-editor view object with dispatch/focus.
+      const view = findCM5Editor(host);
+      if (view) return { editor: 'codemirror', host, cm6: view };
       const content = host.matches?.('.cm-content') ? host : host.querySelector('.cm-content');
       if (content) return { editor: 'codemirror', host, content };
       const ta = block.querySelector('textarea');
@@ -467,7 +471,7 @@ function gate(input, init) {
         await sleep(100);
         resolved = editorFor(block);
       }
-      const { editor, host, cm5, content } = resolved;
+      const { editor, host, cm5, cm6, content } = resolved;
       if (editor === 'unknown') {
         skipped.push(key);
         console.warn(`[Muter] fill: "${key}" field type is unsupported`, block.className || block.tagName);
@@ -515,9 +519,15 @@ function gate(input, init) {
           win?.tinymce?.triggerSave?.();
           window.tinymce?.triggerSave?.();
         } catch { /* ignore */ }
+      } else if (cm5) {
+        // CodeMirror 5: clear the doc, then type through its API.
+        try { cm5.setValue(''); } catch { /* ignore */ }
+        await typeInto({ cm: cm5 }, text, timing);
+      } else if (cm6) {
+        await typeInto({ cm6 }, text, timing);
       } else {
         const cmContent = content || (block.matches?.('.cm-content') ? block : block.querySelector('.cm-content'));
-        await typeInto(cm5 ? { cm6: cm5 } : { el: cmContent || host }, text, timing);
+        await typeInto({ el: cmContent || host }, text, timing);
       }
 
       filled.push(key);
