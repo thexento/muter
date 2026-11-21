@@ -1000,17 +1000,48 @@ function gate(input, init) {
     addLog('flow cancelled');
   }
 
-  function startQuestionNext() {
+  /** 0-based index of the question currently shown (hash is #qN, question numbers are 1-based). */
+  function currentQuestionIndex() {
+    const m = (location.hash || '').match(/#q(\d+)/);
+    if (m) return Number(m[1]);
+    return Math.max(0, (flow?.question?.number || 1) - 1);
+  }
+
+  /**
+   * Set the page hash to a 0-based question index and start the flow once the
+   * next question is actually rendered on the page. Some lab pages load the
+   * next question asynchronously after the hash changes, so poll briefly for
+   * the target question in the extracted list.
+   */
+  async function startAtQuestion(index) {
+    location.hash = `q${index}`;
+    for (let i = 0; i < 40; i += 1) {
+      let target = null;
+      try {
+        target = MuterExtractor.extractQuestions()[index];
+      } catch { target = null; }
+      if (target?.title) {
+        setTimeout(() => startFlow(), 400);
+        return true;
+      }
+      await sleep(250);
+    }
+    return false;
+  }
+
+  async function startQuestionNext() {
     const state = flow;
     if (!state?.question) return;
-    const total = state.question.total || 1;
-    const next = state.question.number + 1;
-    if (next > total) {
+    const nextIndex = currentQuestionIndex() + 1;
+    if (nextIndex >= (state.question.total || 1)) {
       showToast('Muter: last question.');
       return;
     }
-    location.hash = `q${next - 1}`;
-    setTimeout(() => startFlow(), 600);
+    const found = await startAtQuestion(nextIndex);
+    if (!found) {
+      showToast('Muter: next question not found — open it on the page, then Choose question.');
+      cancelFlow();
+    }
   }
 
   function renderQuestionPicker(state) {
@@ -1024,8 +1055,7 @@ function gate(input, init) {
         flowRoot?.remove();
         flowRoot = null;
         flow = null;
-        location.hash = `q${n - 1}`;
-        setTimeout(() => startFlow(), 600);
+        startAtQuestion(n - 1);
       });
       wrap.appendChild(b);
     }
