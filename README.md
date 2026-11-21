@@ -2,13 +2,15 @@
 
 ## Requirements
 
-- **Zen Browser or Firefox 128+** (Gecko; not Chrome).
+- **Firefox 128+ or Chromium (Chrome 114+ / Edge)** — both supported.
 - A **Groq API key** (`gsk_...`) from <https://console.groq.com/keys>.
 - Access to the lab site the extension is scoped to.
 
 ## Install
 
-### Temporary add-on (development)
+### Firefox / Zen
+
+**Temporary add-on (development)**
 
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Click **Load Temporary Add-on…**.
@@ -16,15 +18,25 @@
 4. The sidebar opens automatically (`open_at_install: true`). If it does not, click the
    Muter toolbar icon, press `Alt+Shift+M`, or use **View → Sidebar → Muter**.
 
-### Packaged file
+**Packaged file** — zip the contents of `firefox/` with `manifest.json` at the zip
+root, then open `about:addons` → gear icon → **Install Add-on From File…**.
 
-Zip the contents of `firefox/` with `manifest.json` at the zip root, then open
-`about:addons` → gear icon → **Install Add-on From File…**.
+**After changing code** — manifest changes need a full add-on reload
+(`about:addons` → Muter → **Reload**, or `about:debugging` → **Reload**). Content-script
+changes also need the page reloaded.
 
-### After changing code
+### Chromium (Chrome / Edge / Chrome-based browsers)
 
-Manifest changes need a full add-on reload (`about:addons` → Muter → **Reload**, or
-`about:debugging` → **Reload**). Content-script changes also need the page reloaded.
+**Load unpacked (development)**
+
+1. Open `chrome://extensions` (or `edge://extensions`).
+2. Enable **Developer mode** (top right).
+3. Click **Load unpacked** → select the `chromium/` folder.
+
+**After changing code** — click **Reload** on the extension card; the panel opens on
+the toolbar icon automatically via `chrome.sidePanel.setPanelBehavior`.
+
+Both builds: after changing page-script code (`inject.js` etc.), reload the lab page.
 
 ## Setup
 
@@ -39,7 +51,8 @@ The key is only read by the background script. Page scripts never see it.
 ## Usage
 
 1. Open a question on the lab page.
-2. Open the Muter sidebar.
+2. Open the Muter panel — the Firefox sidebar, or the Chrome/Edge side panel
+   (the toolbar icon toggles it; Firefox lets you pin it with View → Sidebar).
 3. Click **Autofill this question**.
 4. Wait for the Groq step; a review card appears on the page with editable answers.
 5. Edit anything you want.
@@ -50,7 +63,7 @@ The key is only read by the background script. Page scripts never see it.
 | --- | --- |
 | **Save** | Stores answers for this page + question without typing. |
 | **Try again** | Ignores saved answers and requests a fresh set from Groq. |
-| **Close** | Hides the on-page card; the sidebar stays open. |
+| **Close** | Hides the on-page card; the panel/sidebar stays open. |
 | **Copy block** | Copies the answers in `fill.txt` format. |
 | **Try filling again** | Re-runs the typing pass if a field was skipped. |
 | **Choose question** | Shows Q1..QN chips to jump to another question. |
@@ -100,7 +113,7 @@ permission state, and whether the page API is present.
 └──────────────┬───────────────┘
                ▼
 ┌──────────────────────────────┐
-│ background.js (classic page) │
+│ background.js                │
 │  MuterAI → Groq REST API     │
 │  storage.sync (key)          │
 └──────────────────────────────┘
@@ -110,8 +123,15 @@ MAIN-world content scripts run in the page's JavaScript context and do not expos
 `browser`/`chrome`. `bridge.js` runs in the isolated world, where the extension APIs
 exist, and forwards requests/replies over `window.postMessage`.
 
-The background is a classic background page (`background.scripts`), not an MV3 service
-worker — the Zen build used for development rejects `background.service_worker`.
+The background runs in different engine shapes: Firefox uses a classic background page
+(`background.scripts`) — the Zen build used for development rejects
+`background.service_worker` — and Chrome/Edge uses the standard MV3 service worker
+(`background.service_worker`). The same `background.js` code works in both because it
+calls the engine's API through `globalThis.browser ?? globalThis.chrome`.
+
+The toolbar icon opens the panel: `sidebar_action.toggle()` on Firefox,
+`chrome.sidePanel.open()` (or `setPanelBehavior({ openPanelOnActionClick: true })`) on
+Chrome/Edge. Both panels are the same `popup.html` document.
 
 ### Answer flow
 
@@ -147,18 +167,17 @@ worker — the Zen build used for development rejects `background.service_worker
 muter/
 ├─ README.md
 ├─ .gitignore
-├─ firefox/                 ← maintained extension (load this manifest)
-│  ├─ manifest.json
-│  ├─ background.js         message API + inlined Groq client
-│  ├─ ai.js                 standalone Groq client source (same logic)
-│  ├─ bridge.js             isolated-world message bridge
-│  ├─ extractor.js          question + field extraction
-│  ├─ formatter.js          answer storage + fill.txt formatting
-│  ├─ inject.js             page UI, extraction wiring, typing engine
-│  ├─ popup.html            sidebar panel document
-│  ├─ popup.js              sidebar logic
+├─ firefox/                 ← Firefox/Gecko build
+│  ├─ manifest.json           sidebar_action, background.scripts
+│  ├─ background.js           Groq client + toolbar-icon sidebar toggle
+│  ├─ inject.js, extractor.js, formatter.js, bridge.js, ai.js, popup.html, popup.js
 │  └─ icon*.png
-└─ chromium/                early Chrome MV3 prototype (not maintained)
+└─ chromium/                ← Chrome/Edge MV3 build (same page files, adapted)
+   ├─ manifest.json           side_panel.default_path: popup.html,
+   │                          permission "sidePanel", background.service_worker
+   ├─ background.js           toolbar-icon opens the side panel
+   │                          (chrome.sidePanel.setPanelBehavior, open fallback)
+   └─ inject.js, extractor.js, formatter.js, bridge.js, ai.js, popup.html, popup.js
 ```
 
 | File | Responsibility |
