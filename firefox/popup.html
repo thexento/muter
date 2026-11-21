@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<title>Muter</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #FFFFFF;
+  --text: #111111;
+  --text-2: #5F5F5F;
+  --muted: #8E8E8E;
+  --line: #ECECEC;
+  --line-soft: #F3F3F3;
+  --on: #0A8A5F;
+  --warn: #B57C00;
+  --drop: #B42318;
+  --focus: #6A9BFF;
+  --red-soft: rgba(180, 35, 24, .05);
+  --red-line: rgba(180, 35, 24, .15);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+
+body {
+  width: 100%;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── header ─────────────────────────────────────────── */
+header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.logo {
+  width: 30px; height: 30px; flex: none;
+  border-radius: 8px; object-fit: cover;
+  box-shadow: 0 1px 2.5px rgba(0, 0, 0, .08);
+}
+.brand { flex: 1; min-width: 0; }
+.brand h1 { margin: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -.1px; }
+.sub {
+  display: flex; align-items: center; gap: 7px;
+  margin-top: 2px; font-size: 10.5px; color: var(--text-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dot {
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+  background: var(--on);
+  box-shadow: 0 0 0 2.5px rgba(10, 138, 95, .14);
+  transition: background .18s, box-shadow .18s;
+}
+body.paused .dot { background: var(--warn); box-shadow: 0 0 0 2.5px rgba(181, 124, 0, .16); }
+body.unavailable .dot { background: #9E9E9E; box-shadow: 0 0 0 2.5px rgba(158, 158, 158, .18); }
+body.paused .brand h1 { color: var(--text-2); }
+
+/* ── toggles ────────────────────────────────────────── */
+.ctl {
+  position: relative; flex: none;
+  width: 38px; height: 22px;
+  display: inline-block; vertical-align: middle;
+  cursor: pointer;
+}
+.ctl input {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  margin: 0; opacity: 0; cursor: pointer; z-index: 2;
+}
+.ctl .track {
+  position: absolute; inset: 0; border-radius: 999px;
+  background: #E4E4E4;
+  transition: background .16s, box-shadow .16s;
+}
+.ctl .track::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #8B8B8B;
+  box-shadow: 0 1px 2.5px rgba(0, 0, 0, .16);
+  transition: transform .16s, background .16s;
+}
+.ctl input:checked + .track { background: var(--on); }
+.ctl input:checked + .track::after { transform: translateX(14px); background: #FFFFFF; }
+.ctl input:focus-visible + .track { box-shadow: 0 0 0 2px var(--focus); }
+.ctl input:disabled + .track { opacity: .5; }
+
+/* ── banner ─────────────────────────────────────────── */
+#banner {
+  flex: none;
+  display: none; margin: 10px 16px 0; padding: 9px 11px;
+  border: 1px solid var(--red-line); border-radius: 9px;
+  background: var(--red-soft);
+  color: #8C2D28; font-size: 11px; line-height: 1.5;
+}
+#banner b { display: block; margin-bottom: 1px; font-size: 12px; color: #7A2924; }
+#banner button {
+  width: 100%; margin-top: 9px; padding: 7px;
+  border: 0; border-radius: 7px;
+  background: var(--text); color: #FFFFFF;
+  font: 700 11px system-ui; cursor: pointer;
+}
+#banner button:hover { background: #1A1A1A; }
+
+/* ── scroll area ────────────────────────────────────── */
+main { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #E3E3E3 transparent; }
+
+/* ── hero / current question ────────────────────────── */
+.hero { padding: 14px 16px 15px; }
+.hero-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.eyebrow {
+  font: 600 9px system-ui; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.q-state { flex: none; font: 600 9.5px system-ui; color: var(--muted); }
+.q-state.ok { color: var(--on); }
+.q-state.bad { color: var(--drop); }
+.q-line {
+  margin: 6px 0 11px; font: 600 13px/1.45 system-ui;
+  color: var(--text); word-break: break-word;
+}
+
+.btn-primary {
+  width: 100%; padding: 10px 12px;
+  border: 1px solid var(--text); border-radius: 9px;
+  background: var(--text); color: #FFFFFF;
+  font: 600 12.5px system-ui; cursor: pointer;
+  transition: background .13s, opacity .13s;
+}
+.btn-primary:hover { background: #1A1A1A; }
+.btn-primary:active { transform: translateY(1px); }
+.btn-primary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.btn-primary:disabled { opacity: .45; cursor: default; }
+
+.key-row { display: flex; align-items: center; gap: 9px; margin-top: 10px; }
+#ai-note { flex: 1; min-width: 0; font-size: 10.5px; line-height: 1.45; color: var(--muted); }
+#ai-note.warn { color: #8C2D28; }
+#ai-key-row { margin-top: 8px; }
+#ai-key {
+  width: 100%; padding: 7px 9px; border-radius: 8px;
+  border: 1px solid #E1E1E1; background: #FFFFFF; color: var(--text);
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; outline: none;
+  transition: border-color .12s, box-shadow .12s;
+}
+#ai-key:focus { border-color: var(--focus); box-shadow: 0 0 0 2px rgba(106, 155, 255, .3); }
+
+.btn-ghost {
+  flex: none; padding: 5px 10px;
+  border: 1px solid #E1E1E1; border-radius: 7px;
+  background: #FFFFFF; color: var(--text-2);
+  font: 600 10.5px system-ui; cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.btn-ghost:hover { color: var(--text); border-color: #CFCFCF; }
+.btn-ghost:active { transform: translateY(1px); }
+
+/* ── collapsible panels ─────────────────────────────── */
+details.panel { border-top: 1px solid var(--line); }
+details.panel > summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 16px;
+  font: 600 10.5px system-ui; letter-spacing: .02em; color: var(--text-2);
+  transition: color .13s;
+}
+details.panel > summary:hover { color: var(--text); }
+details.panel > summary::-webkit-details-marker { display: none; }
+details.panel > summary::after {
+  content: ""; width: 6px; height: 6px; flex: none;
+  border-right: 1.5px solid #9A9A9A; border-bottom: 1.5px solid #9A9A9A;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform .15s;
+}
+details.panel[open] > summary::after { transform: rotate(-135deg) translateY(-2px); }
+.panel-body { padding: 0 16px 12px; }
+
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+fieldset:disabled { opacity: .45; }
+
+.row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 30px; font-size: 12px; color: var(--text-2); cursor: pointer;
+  transition: color .14s;
+}
+.row:hover { color: var(--text); }
+.lbl { min-width: 0; }
+
+.sel { position: relative; display: inline-flex; flex: none; }
+select {
+  appearance: none; -moz-appearance: none;
+  min-width: 76px; padding: 4px 20px 4px 8px;
+  border: 1px solid #E1E1E1; border-radius: 7px;
+  background: #FFFFFF; color: var(--text-2);
+  font: 600 10.5px system-ui; cursor: pointer;
+  transition: border-color .12s, box-shadow .12s;
+}
+select:hover { border-color: #CFCFCF; color: var(--text); }
+select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.sel::after {
+  content: ""; position: absolute; right: 7px; top: 50%;
+  width: 5px; height: 5px; pointer-events: none;
+  border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted);
+  transform: translateY(-68%) rotate(45deg);
+}
+
+.range { display: flex; align-items: center; gap: 7px; flex: none; }
+input[type=range] { width: 104px; height: 15px; accent-color: var(--on); cursor: pointer; }
+output {
+  min-width: 38px; text-align: right;
+  font: 600 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-2); font-variant-numeric: tabular-nums;
+}
+
+.group-label {
+  margin: 9px 0 3px; font: 600 8.5px system-ui;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+}
+.group-label:first-child { margin-top: 0; }
+
+/* ── stats ──────────────────────────────────────────── */
+.stats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px 8px;
+  padding: 13px 16px; border-top: 1px solid var(--line);
+}
+.stat { padding: 0; }
+.stat b {
+  display: block; font-size: 15px; font-weight: 600; line-height: 1.16;
+  letter-spacing: -.15px; font-variant-numeric: tabular-nums; color: var(--text);
+}
+.stat span {
+  display: block; margin-top: 1px;
+  font-size: 8px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted);
+}
+.stat.warn b { color: var(--warn); }
+.stat.bad b { color: var(--drop); }
+body.unavailable .stats { opacity: .45; }
+
+#mix { display: none; align-items: center; gap: 9px; padding: 0 16px 12px; }
+#mix.on { display: flex; }
+#mix .seg { flex: 1; display: flex; height: 4px; border-radius: 999px; overflow: hidden; background: #F1F1F1; }
+#mix .seg i { display: block; height: 100%; transition: width .24s; }
+#mix-sent { background: var(--on); }
+#mix-asked { background: var(--warn); }
+#mix-dropped { background: var(--drop); }
+#mix-text { flex: none; font-size: 9.5px; color: var(--muted); }
+
+/* ── activity ───────────────────────────────────────── */
+#log {
+  max-height: 140px; overflow-y: auto; scrollbar-width: thin;
+  scrollbar-color: #E3E3E3 transparent;
+  font: 10.5px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-2);
+}
+.lrow { display: flex; align-items: flex-start; gap: 7px; padding: 2px 0; border-bottom: 1px solid rgba(0,0,0,.03); }
+.lrow:last-child { border-bottom: 0; }
+.lrow .k {
+  width: 5px; height: 5px; flex: none; margin-top: 6px;
+  border-radius: 50%; background: #8B8B8B;
+}
+.k.paste { background: var(--on); }
+.k.block { background: #7E9CC9; }
+.k.drop { background: var(--warn); }
+.k.warn { background: var(--drop); }
+.k.type { background: var(--text); }
+.lrow time { flex: none; padding-top: 1px; font-size: 9.5px; color: #A3A3A3; }
+.lrow .m { min-width: 0; word-break: break-word; }
+.empty { padding: 5px 0 4px; text-align: center; font: 11px system-ui; color: #A3A3A3; }
+
+/* ── footer ─────────────────────────────────────────── */
+footer {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 9px 16px 11px; border-top: 1px solid var(--line-soft);
+}
+.btn-reset {
+  flex: 1; padding: 7px 10px; border: 1px solid #E1E1E1; border-radius: 8px;
+  background: #FFFFFF; color: var(--text-2);
+  font: 600 11px system-ui; cursor: pointer;
+  transition: color .13s, border-color .13s, background .13s;
+}
+.btn-reset:hover { color: var(--text); border-color: #CFCFCF; }
+.btn-reset.armed { border-color: var(--drop); background: var(--red-soft); color: var(--drop); }
+.ver { flex: none; font-size: 9.5px; color: #A3A3A3; }
+.link {
+  flex: none; padding: 2px 0; border: 0; background: none;
+  color: #A3A3A3; font: 600 9.5px system-ui; cursor: pointer;
+  transition: color .12s;
+}
+.link:hover { color: var(--text-2); }
+.link:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+#diag-out {
+  flex: none; margin: 0; padding: 8px 16px 10px;
+  border-top: 1px solid var(--line-soft);
+  background: #FAFAFA; color: var(--text-2);
+  font: 9.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap; word-break: break-all;
+  max-height: 38vh; overflow: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" id="logo" src="icon48.png" alt="" width="30" height="30">
+  <div class="brand">
+    <h1>Muter</h1>
+    <div class="sub"><span class="dot"></span><span id="status">Starting…</span></div>
+  </div>
+  <label class="ctl" title="Enable Muter">
+    <input type="checkbox" id="sw" role="switch" aria-label="Enable Muter">
+    <span class="track"></span>
+  </label>
+</header>
+
+<div id="banner" role="status">
+  <b id="banner-title"></b>
+  <span id="banner-msg"></span>
+  <button id="grant" type="button" hidden>Grant access</button>
+</div>
+
+<main>
+  <section class="hero">
+    <div class="hero-top">
+      <span class="eyebrow">Current question</span>
+      <span id="q-state" class="q-state">No question detected</span>
+    </div>
+    <div id="q-line" class="q-line">Open a lab question, then press Autofill.</div>
+    <button class="btn-primary" id="ai-fill" type="button">Autofill this question</button>
+    <div class="key-row">
+      <span id="ai-note"></span>
+      <button class="btn-ghost" id="ai-key-btn" type="button">Set key</button>
+    </div>
+    <div id="ai-key-row" hidden>
+      <input id="ai-key" type="password" placeholder="Groq API key (gsk_…)" autocomplete="off" spellcheck="false">
+    </div>
+  </section>
+
+  <details class="panel">
+    <summary>AI options</summary>
+    <div class="panel-body">
+      <label class="row">
+        <span class="lbl">Auto-type after generating</span>
+        <span class="ctl"><input type="checkbox" id="s-autoType" role="switch"><span class="track"></span></span>
+      </label>
+      <label class="row">
+        <span class="lbl">Auto-fill next on #qN</span>
+        <span class="ctl"><input type="checkbox" id="s-autoQueue" role="switch"><span class="track"></span></span>
+      </label>
+    </div>
+  </details>
+
+  <details class="panel">
+    <summary>Protection</summary>
+    <div class="panel-body">
+      <fieldset id="settings">
+        <div class="group-label">Typing</div>
+        <label class="row">
+          <span class="lbl">Type pastes as keystrokes</span>
+          <span class="ctl"><input type="checkbox" id="s-typePaste" role="switch"><span class="track"></span></span>
+        </label>
+        <label class="row">
+          <span class="lbl">Typing delay</span>
+          <div class="range">
+            <input type="range" id="s-delay" min="5" max="120" step="1" aria-label="Typing delay in milliseconds">
+            <output id="delay-out" for="s-delay">28 ms</output>
+          </div>
+        </label>
+        <label class="row">
+          <span class="lbl">Block metrics sync</span>
+          <span class="ctl"><input type="checkbox" id="s-sync" role="switch"><span class="track"></span></span>
+        </label>
+
+        <div class="group-label">Reporting</div>
+        <label class="row">
+          <span class="lbl">Gate warning API</span>
+          <span class="ctl"><input type="checkbox" id="s-gate" role="switch"><span class="track"></span></span>
+        </label>
+        <label class="row">
+          <span class="lbl">Tab switch</span>
+          <span class="sel"><select id="s-tab">
+            <option value="drop">drop</option>
+            <option value="send">send</option>
+            <option value="ask">ask</option>
+          </select></span>
+        </label>
+        <label class="row">
+          <span class="lbl">Other warnings</span>
+          <span class="sel"><select id="s-other">
+            <option value="drop">drop</option>
+            <option value="send">send</option>
+            <option value="ask">ask</option>
+          </select></span>
+        </label>
+
+        <div class="group-label">Surfacing</div>
+        <label class="row">
+          <span class="lbl">Report tab as always visible</span>
+          <span class="ctl"><input type="checkbox" id="s-visible" role="switch"><span class="track"></span></span>
+        </label>
+        <label class="row">
+          <span class="lbl">Hide warning popup</span>
+          <span class="ctl"><input type="checkbox" id="s-modal" role="switch"><span class="track"></span></span>
+        </label>
+        <label class="row">
+          <span class="lbl">Hide warning panel</span>
+          <span class="ctl"><input type="checkbox" id="s-banner" role="switch"><span class="track"></span></span>
+        </label>
+      </fieldset>
+    </div>
+  </details>
+
+  <section class="stats">
+    <div class="stat"><b id="c-copy">0</b><span>Copy</span></div>
+    <div class="stat"><b id="c-cut">0</b><span>Cut</span></div>
+    <div class="stat"><b id="c-paste">0</b><span>Paste</span></div>
+    <div class="stat"><b id="c-chars">0</b><span>Chars</span></div>
+    <div class="stat warn"><b id="c-warn">0</b><span>Warns</span></div>
+    <div class="stat bad"><b id="c-drop">0</b><span>Dropped</span></div>
+  </section>
+
+  <div id="mix">
+    <div class="seg" title="sent · asked · dropped">
+      <i id="mix-sent"></i><i id="mix-asked"></i><i id="mix-dropped"></i>
+    </div>
+    <span id="mix-text"></span>
+  </div>
+
+  <details class="panel">
+    <summary>Activity</summary>
+    <div class="panel-body">
+      <div id="log" aria-live="polite"></div>
+    </div>
+  </details>
+</main>
+
+<footer>
+  <button class="btn-reset" id="reset" type="button">Reset counters</button>
+  <span class="ver" id="ver">v1.2.0</span>
+  <button class="link" id="diag-btn" type="button">Diagnostics</button>
+</footer>
+<pre id="diag-out" hidden></pre>
+
+<script src="popup.js"></script>
+</body>
+</html>

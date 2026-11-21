@@ -1,0 +1,20 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Local previews / screenshots
+.preview/
+
+# Packaged builds
+*.zip
+*.xpi
+
+# Never commit API keys or local env files
+.env
+.env.*
+!.env.example
