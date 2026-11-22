@@ -853,6 +853,7 @@ function gate(input, init) {
         if (!question?.title || visited.has(question.number)) break;
         visited.add(question.number);
         let saved = await answerFor(answerUrl(), question.number);
+        if (saved && !answersMatchQuestion(saved, question)) saved = null;
         if (!saved && settings.autoQueueGenerate) {
           showToast(`Muter auto: generating Q${question.number}…`);
           const reply = await generateVia(question).catch(() => null);
@@ -927,6 +928,7 @@ function gate(input, init) {
   }
 
   async function startFlow(force = false) {
+    clearResume();
     const root = uiRoot();
     if (!root) return;
     if (!flow) flow = {};
@@ -936,6 +938,7 @@ function gate(input, init) {
     state.saved = false;
     state.result = null;
     state.stage = '';
+    state.answers = null;
     renderFlow();
 
     let questions;
@@ -960,7 +963,12 @@ function gate(input, init) {
     }
     console.log('[Muter] question fetched — Q' + state.question.number, state.question.title);
     console.log('[Muter] fields detected', state.question.fields.map((f) => `${f.role}(${f.fieldType}${f.fillable ? '' : ', not fillable'})`));
-    const saved = !force && await answerFor(answerUrl(), state.question.number);
+    const savedEntry = !force && await answerFor(answerUrl(), state.question.number);
+    const saved = savedEntry && answersMatchQuestion(savedEntry, state.question) ? savedEntry : null;
+    if (savedEntry && !saved) {
+      console.warn('[Muter] ignoring saved answers: stored for a different question',
+        { stored: savedEntry.question, current: state.question.title });
+    }
     if (saved) {
       state.answers = {
         title: saved.title, theory: saved.theory, algorithm: saved.algorithm,
@@ -976,13 +984,42 @@ function gate(input, init) {
     await generateInto(state);
   }
 
+  function hashQuestionIndex() {
+    const m = (location.hash || '').match(/#q(\d+)/);
+    return m ? Number(m[1]) : null;
+  }
+
+  const normalizeTitle = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+  /**
+   * Saved answers record the question text they were generated for. If that
+   * text no longer matches the question at the same position (re-numbered lab,
+   * reshuffled page, or an entry written while the wrong question was open),
+   * the saved answers must not be shown/typed — regenerate instead.
+   */
+  function answersMatchQuestion(entry, question) {
+    const stored = normalizeTitle(entry?.question);
+    const current = normalizeTitle(question?.title);
+    if (!stored || !current) return true; // nothing to compare
+    return stored === current;
+  }
+
   function pickQuestion(questions) {
-    const hash = (location.hash || '').match(/#q(\d+)/);
-    if (hash && questions[Number(hash[1])]) return questions[Number(hash[1])];
+    if (!questions?.length) return null;
+    const hashIndex = hashQuestionIndex();
     const visibleIndex = questions.findIndex((q) => {
       const body = document.querySelectorAll('.question-body')[q.index];
       return body && MuterExtractor.visible(body);
     });
+    if (hashIndex != null) {
+      if (questions[hashIndex]) return questions[hashIndex];
+      // Some lab pages render only the question currently open, so the list
+      // has a single entry at index 0 even though the hash says #qN. The hash
+      // is the page's own question pointer: trust it for the number (labels +
+      // storage keys) while keeping the rendered entry's fields/body.
+      const base = questions[visibleIndex >= 0 ? visibleIndex : 0];
+      if (base) return { ...base, number: hashIndex + 1 };
+    }
     return questions[visibleIndex >= 0 ? visibleIndex : 0] || questions[0];
   }
 
@@ -1027,32 +1064,84 @@ function gate(input, init) {
 
   /** 0-based index of the question currently shown (hash is #qN, question numbers are 1-based). */
   function currentQuestionIndex() {
-    const m = (location.hash || '').match(/#q(\d+)/);
-    if (m) return Number(m[1]);
+    const fromHash = hashQuestionIndex();
+    if (fromHash != null) return fromHash;
     return Math.max(0, (flow?.question?.number || 1) - 1);
   }
 
   /**
    * Set the page hash to a 0-based question index and start the flow once the
-   * next question is actually rendered on the page. Some lab pages load the
-   * next question asynchronously after the hash changes, so poll briefly for
-   * the target question in the extracted list.
+   * page actually shows a different question. The page may load the next
+   * question asynchronously after the hash changes (and may render only the
+   * open question), so positional indexing of the extracted list is not
+   * reliable — poll for the question text to change instead.
    */
   async function startAtQuestion(index, force = false) {
+    const previousTitle = flow?.question?.title || '';
+    if (index === currentQuestionIndex() && flow?.question?.title) {
+      startFlow(force);
+      return true;
+    }
     location.hash = `q${index}`;
-    for (let i = 0; i < 40; i += 1) {
+    for (let i = 0; i < 60; i += 1) {
       let target = null;
       try {
-        target = MuterExtractor.extractQuestions()[index];
+        target = pickQuestion(MuterExtractor.extractQuestions());
       } catch { target = null; }
-      if (target?.title) {
-        setTimeout(() => startFlow(force), 400);
+      // Wait for the page to actually show a *different* question. Trusting
+      // `extractQuestions()[index]` failed on pages that render only the open
+      // question (the list stays at one entry), so the flow never started.
+      if (target?.title && target.title !== previousTitle) {
+        setTimeout(() => startFlow(force), 350);
         return true;
       }
       await sleep(250);
     }
     return false;
   }
+
+  const RESUME_KEY = 'muter.resume';
+
+  function setResume(index) {
+    try {
+      sessionStorage.setItem(RESUME_KEY, JSON.stringify({ index, at: Date.now() }));
+    } catch { /* ignore */ }
+  }
+
+  function clearResume() {
+    try { sessionStorage.removeItem(RESUME_KEY); } catch { /* ignore */ }
+  }
+
+  /**
+   * Some lab pages reload the document on question navigation. A reload wipes
+   * this content script, so "Next question" leaves a resume marker that a
+   * fresh script picks up and turns into a forced generation for the question
+   * the page now shows.
+   */
+  async function resumePendingFlow() {
+    let pending = null;
+    try {
+      const raw = sessionStorage.getItem(RESUME_KEY);
+      if (raw) {
+        pending = JSON.parse(raw);
+        clearResume();
+      }
+    } catch { /* ignore */ }
+    if (!pending || Date.now() - Number(pending.at || 0) > 60000) return;
+    for (let i = 0; i < 40; i += 1) {
+      let target = null;
+      try {
+        target = pickQuestion(MuterExtractor.extractQuestions());
+      } catch { target = null; }
+      if (target?.title) {
+        startFlow(true);
+        return;
+      }
+      await sleep(250);
+    }
+  }
+
+  setTimeout(resumePendingFlow, 400);
 
   async function startQuestionNext() {
     const state = flow;
@@ -1062,11 +1151,13 @@ function gate(input, init) {
       showToast('Muter: last question.');
       return;
     }
+    setResume(nextIndex);
     // Clicking "Next question" means moving on and generating fresh answers —
     // saved answers for the next question are stale, so force a Groq call.
     const found = await startAtQuestion(nextIndex, true);
     if (!found) {
-      showToast('Muter: next question not found — open it on the page, then Choose question.');
+      clearResume();
+      showToast('Muter: next question did not open — click it on the page, then use Autofill.');
       cancelFlow();
     }
   }
@@ -1094,8 +1185,8 @@ function gate(input, init) {
     const question = pickQuestion(questions);
     if (!question?.title) return;
     const saved = await answerFor(answerUrl(), question.number);
-    if (!saved) {
-      showToast(`Muter: no saved answer for Q${question.number} — open the Muter panel.`);
+    if (!saved || !answersMatchQuestion(saved, question)) {
+      showToast(`Muter: no saved answers for Q${question.number} — open the Muter panel.`);
       return;
     }
     const answers = {

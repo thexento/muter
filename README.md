@@ -69,7 +69,10 @@ The key is only read by the background script. Page scripts never see it.
 | **Choose question** | Shows Q1..QN chips to jump to another question. |
 | **Next question** (on the done card) | Moves to the next question and generates fresh answers via Groq — saved answers for it are ignored. |
 
-Saved answers are reused automatically; **Try again** forces regeneration.
+Saved answers are reused automatically; **Try again** forces regeneration. A
+saved entry records the question text it was generated for, so an entry left
+behind by an earlier question (for example after the page re-numbers its
+questions) is treated as missing and regenerated instead of being typed.
 
 ## Settings
 
