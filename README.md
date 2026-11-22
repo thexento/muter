@@ -67,6 +67,7 @@ The key is only read by the background script. Page scripts never see it.
 | **Copy block** | Copies the answers in `fill.txt` format. |
 | **Try filling again** | Re-runs the typing pass if a field was skipped. |
 | **Choose question** | Shows Q1..QN chips to jump to another question. |
+| **Next question** (on the done card) | Moves to the next question and generates fresh answers via Groq — saved answers for it are ignored. |
 
 Saved answers are reused automatically; **Try again** forces regeneration.
 

@@ -1038,7 +1038,7 @@ function gate(input, init) {
    * next question asynchronously after the hash changes, so poll briefly for
    * the target question in the extracted list.
    */
-  async function startAtQuestion(index) {
+  async function startAtQuestion(index, force = false) {
     location.hash = `q${index}`;
     for (let i = 0; i < 40; i += 1) {
       let target = null;
@@ -1046,7 +1046,7 @@ function gate(input, init) {
         target = MuterExtractor.extractQuestions()[index];
       } catch { target = null; }
       if (target?.title) {
-        setTimeout(() => startFlow(), 400);
+        setTimeout(() => startFlow(force), 400);
         return true;
       }
       await sleep(250);
@@ -1062,7 +1062,9 @@ function gate(input, init) {
       showToast('Muter: last question.');
       return;
     }
-    const found = await startAtQuestion(nextIndex);
+    // Clicking "Next question" means moving on and generating fresh answers —
+    // saved answers for the next question are stale, so force a Groq call.
+    const found = await startAtQuestion(nextIndex, true);
     if (!found) {
       showToast('Muter: next question not found — open it on the page, then Choose question.');
       cancelFlow();
