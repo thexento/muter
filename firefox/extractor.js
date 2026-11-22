@@ -342,10 +342,15 @@
     }) || null;
   }
 
-  /** Find a live .answer-block whose role matches, skipping already-used blocks. */
-  function liveBlockForRole(role, used) {
+  /**
+   * Find a live .answer-block whose role matches, skipping already-used blocks.
+   * When `scope` is given, only blocks inside that container are considered —
+   * used when typing must target a specific question's blocks.
+   */
+  function liveBlockForRole(role, used, scope) {
     for (const block of root.document.querySelectorAll(SELECTORS.answerBlock)) {
       if (!visible(block) || used?.has(block)) continue;
+      if (scope && !scope.contains(block)) continue;
       const info = describeBlock(block, 999, false);
       if (info.role === role && info.fillable) return block;
     }

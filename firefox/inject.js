@@ -439,14 +439,28 @@ function gate(input, init) {
     const skipped = [];
     const used = new Set();
 
+    // The page may still be showing the previous question while the flow is
+    // on the next one — typing must always target the flow question's blocks.
+    const questionBodies = () =>
+      Array.from(document.querySelectorAll('.question-body')).filter(MuterExtractor.visible);
+    let qBody = null;
+    if (question?.index != null && document.querySelectorAll('.question-body').length) {
+      for (let i = 0; i < 20; i += 1) {
+        qBody = questionBodies()[question.index] || null;
+        if (qBody) break;
+        await sleep(150);
+      }
+    }
+
     for (const key of ANSWER_KEYS) {
       const text = String(answers[key] || '');
       if (!text.trim() || key === 'output') continue;
 
       let field = question.fields.find((f) => f.role === key && f.fillable);
       let block = field ? MuterExtractor.findBlock(field) : null;
+      if (qBody && block && !qBody.contains(block)) block = null; // marker/label from another question
       if (!block || used.has(block)) {
-        const live = MuterExtractor.liveBlockForRole(key, used);
+        const live = MuterExtractor.liveBlockForRole(key, used, qBody);
         if (live) block = live;
       }
       if (!block) {
@@ -454,7 +468,18 @@ function gate(input, init) {
         // page a moment before declaring the field missing.
         for (let i = 0; i < 20 && !block; i += 1) {
           await sleep(150);
-          block = MuterExtractor.liveBlockForRole(key, used);
+          block = MuterExtractor.liveBlockForRole(key, used, qBody);
+        }
+      }
+      if (block && questionBodies().length) {
+        // Never type into a question the flow isn't processing: when the
+        // page shows some question body, the block must be in the flow
+        // question's body.
+        const blockBody = questionBodies().find((b) => b.contains(block)) || null;
+        if (!qBody || blockBody !== qBody) {
+          skipped.push(key);
+          console.warn(`[Muter] fill: "${key}" — flow question is not the one on this page`);
+          continue;
         }
       }
       if (!block) {
